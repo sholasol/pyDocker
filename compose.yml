@@ -1,26 +1,42 @@
 services:
   app:
-    build: 
-      context: .
-      # dockerfile: Dockerfile
+    build: .
     ports:
       - "8000:8000"
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /app
+          ignore:
+            - .venv/
+        - action: rebuild
+          path: pyproject.toml
     volumes:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
-    command: uv run fastapi dev main.py --host 0.0.0.0 --port 8000
+    depends_on:
+      db:
+        condition: service_healthy # Wait for DB to be fully ready
     restart: unless-stopped
+
   db:
     image: postgres:latest
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=pydocker
+      - POSTGRES_USER=pydocker
+      - POSTGRES_PASSWORD=pydocker
     ports:
       - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      # FIX: Use /var/lib/postgresql for Postgres 18+ compatibility
+      - db_data:/var/lib/postgresql
+    healthcheck: # Ensures the app waits for the DB to initialize
+      test: ["CMD-SHELL", "pg_isready -U pydocker -d pydocker"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 volumes:
